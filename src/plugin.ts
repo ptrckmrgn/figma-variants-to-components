@@ -1,89 +1,70 @@
 const plugin = () => {
-    let components: ComponentNode[] = [];
-    let frames: FrameNode[] = [];
+    let componentSets: ComponentSetNode[] = [];
+    let components: SceneNode[] = [];
 
     const selection = figma.currentPage.selection;
 
     if (selection.length > 0) {
         for (const node of selection) {
-            components = components.concat(getComponentNodes(node));            
+            componentSets = componentSets.concat(getComponentSetNodes(node));            
         }
-        for (const component of components) {
-            const parent = component.parent;
-            const frame = createFrameFromComponent(component);
-            // Reposition frame in tree and on the canvas
-            if (parent) {
-                if (parent.type !== "COMPONENT_SET") {
-                    const index = parent.children.indexOf(component);
-                    parent.insertChild(index, frame);
-                    frame.x = component.x;
-                    frame.y = component.y;
-                }
-                else { // It's a set of variants
-                    const grandparent = parent.parent;
-                    if (grandparent) {
-                        const index = grandparent.children.indexOf(parent);
-                        grandparent.insertChild(index, frame);
-                    }
-                    frame.x = parent.x + component.x;
-                    frame.y = parent.y + component.y;
-                    frame.name = component.name; // Rename to capture variant properties
-                }
-            }
-            else {
-                frame.x = component.x;
-                frame.y = component.y;
-            }
+        for (const componentSet of componentSets) {
+            const parent = componentSet.parent;
+            const variants = componentSet.children;
+            
+            for (const variant of variants) {
+                // Save position and name
+                const x = componentSet.x + variant.x;
+                const y = componentSet.y + variant.y;
+                const name = variant.name;
 
-            // Save layer tree expanded state
-            frame.setPluginData("expanded", JSON.stringify(component.expanded));
-            frame.expanded = component.expanded;
-            component.remove();
-            frames.push(frame);
+                if (parent) {
+                    const index = parent.children.indexOf(componentSet);
+                    parent.insertChild(index, variant)
+                    variant.x = x
+                    variant.y = y;
+                    variant.name = name; // Rename to capture variant properties
+                }
+                components.push(variant);
+            }
         }
 
         // Report results (and set new selection)
-        const count = frames.length;
+        const count = components.length;
         if (count > 0) {
-            figma.currentPage.selection = frames;
+            figma.currentPage.selection = components;
 
-            // Reset expanded state from saved
-            for (const frame of frames) {
-                frame.expanded = JSON.parse(frame.getPluginData("expanded"));
-            }
+            // // Reset expanded state from saved
+            // for (const component of components) {
+            //     component.expanded = JSON.parse(component.getPluginData("expanded"));
+            // }
 
             figma.notify(
-                `${count} component${
+                `${count} variant${
                     count > 1 ? "s" : ""
-                } successfully detached`
+                } successfully converted to components`
             );
         } else {
-            figma.notify("No main components found in your selection");
+            figma.notify("No variant sets found in your selection");
         }
     } else {
-        figma.notify("Select a main component to detach");
+        figma.notify("Select a set of variants to convert to components");
     }
 
     figma.closePlugin();
 };
 
-const getComponentNodes = (node: SceneNode): ComponentNode[] => {
+const getComponentSetNodes = (node: SceneNode): ComponentSetNode[] => {
     // If node has children, traverse
-    if (node.type === "COMPONENT") {
+    if (node.type === "COMPONENT_SET") {
         return [node];
     } else if ("children" in node && node.children.length > 0) {
-        return node.children.reduce((all: ComponentNode[], child) => {
-            return all.concat(getComponentNodes(child));
+        return node.children.reduce((all: ComponentSetNode[], child) => {
+            return all.concat(getComponentSetNodes(child));
         }, []);
     } else {
         return [];
     }
-};
-
-const createFrameFromComponent = (component: ComponentNode): FrameNode => {
-    const instance = component.createInstance();
-    const frame = instance.detachInstance();
-    return frame;
 };
 
 const clone = (value: any): any => {
