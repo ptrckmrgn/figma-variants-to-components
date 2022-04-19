@@ -1,0 +1,8 @@
+{
+    "name": "Variants to Components",
+    "id": "1098200870344591036",
+    "api": "1.0.0",
+    "main": "build/code.js",
+    "ui": "build/ui.html",
+    "editorType": ["figma"]
+}
